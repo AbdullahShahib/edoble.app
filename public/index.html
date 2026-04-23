@@ -118,9 +118,13 @@
         output.textContent = "Checking...";
         try {
           const res = await fetch("/api/health");
-          const body = await res.json();
+          const contentType = res.headers.get("content-type") || "";
+          const body = contentType.includes("application/json")
+            ? await res.json()
+            : await res.text();
           const statusClass = res.ok ? "ok" : "bad";
-          output.innerHTML = `<span class="${statusClass}">HTTP ${res.status}</span>\n${JSON.stringify(body, null, 2)}`;
+          const renderedBody = typeof body === "string" ? body : JSON.stringify(body, null, 2);
+          output.innerHTML = `<span class="${statusClass}">HTTP ${res.status}</span>\n${renderedBody}`;
         } catch (err) {
           output.innerHTML = `<span class="bad">Request failed</span>\n${String(err)}`;
         }
