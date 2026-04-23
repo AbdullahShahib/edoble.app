@@ -79,6 +79,33 @@ export async function createSession(input: {
   };
 }
 
+export async function revokeSession(jti: string): Promise<boolean> {
+  const [result] = await pool.execute(
+    `UPDATE auth_sessions
+     SET revoked_at = UTC_TIMESTAMP()
+     WHERE jti = ?
+       AND revoked_at IS NULL`,
+    [jti]
+  );
+
+  const changed = (result as { affectedRows?: number }).affectedRows ?? 0;
+  return changed === 1;
+}
+
+export async function isSessionActive(jti: string): Promise<boolean> {
+  const row = await queryOne<{ ok: number }>(
+    `SELECT 1 AS ok
+     FROM auth_sessions
+     WHERE jti = ?
+       AND revoked_at IS NULL
+       AND expires_at > UTC_TIMESTAMP()
+     LIMIT 1`,
+    [jti]
+  );
+
+  return row?.ok === 1;
+}
+
 export async function upsertDeviceAttestation(input: {
   userId: number;
   deviceId: string;

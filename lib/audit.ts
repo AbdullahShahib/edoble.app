@@ -4,7 +4,7 @@ import { sha256 } from "./crypto.js";
 export async function writeAuthAudit(input: {
   email?: string;
   deviceId?: string;
-  eventType: "challenge_issued" | "login_success" | "login_failure" | "integrity_failure";
+  eventType: "challenge_issued" | "login_success" | "login_failure" | "integrity_failure" | "logout_success";
   reason?: string;
 }): Promise<void> {
   const emailHash = input.email ? sha256(input.email.toLowerCase()) : sha256("unknown");

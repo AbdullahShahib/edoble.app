@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS auth_audit_log (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   email_hash CHAR(64) NOT NULL,
   device_id VARCHAR(128) NULL,
-  event_type ENUM('challenge_issued', 'login_success', 'login_failure', 'integrity_failure') NOT NULL,
+  event_type ENUM('challenge_issued', 'login_success', 'login_failure', 'integrity_failure', 'logout_success') NOT NULL,
   reason VARCHAR(128) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
