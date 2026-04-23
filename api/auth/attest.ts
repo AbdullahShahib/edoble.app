@@ -10,15 +10,16 @@ import { verifyPlayIntegrityToken } from "../../lib/integrity.js";
 import { badRequest, forbidden, json, methodNotAllowed, serverError, handleOptions } from "../../lib/http.js";
 import { createIntegrityNonce } from "../../lib/auth.js";
 import { writeAuthAudit } from "../../lib/audit.js";
+import { validateNonce } from "../../lib/security.js";
 
 const schema = z.object({
-  nonce: z.string().min(10).max(256),
+  nonce: z.string().min(24).max(512),
   integrityToken: z.string().min(10)
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method === "OPTIONS") {
-    handleOptions(res);
+    handleOptions(res, req);
     return;
   }
 
@@ -30,16 +31,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     try {
       const nonce = await createIntegrityNonce(session.email);
-      json(res, 200, { nonce, use: "submit_to_play_integrity_then_POST_same_nonce" });
+      json(res, 200, { nonce, use: "submit_to_play_integrity_then_POST_same_nonce" }, req);
     } catch {
-      serverError(res);
+      serverError(res, req);
     }
 
     return;
   }
 
   if (req.method !== "POST") {
-    methodNotAllowed(res, ["GET", "POST"]);
+    methodNotAllowed(res, ["GET", "POST"], req);
     return;
   }
 
@@ -51,7 +52,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      badRequest(res, "invalid_payload");
+      badRequest(res, undefined, req);
+      return;
+    }
+
+    // Validate nonce format
+    if (!validateNonce(parsed.data.nonce)) {
+      badRequest(res, undefined, req);
       return;
     }
 
@@ -63,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         eventType: "integrity_failure",
         reason: "attestation_nonce_invalid_or_expired"
       });
-      forbidden(res, "invalid_nonce");
+      forbidden(res, undefined, req);
       return;
     }
 
@@ -75,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         eventType: "integrity_failure",
         reason: "attestation_refresh_failed"
       });
-      forbidden(res, "device_integrity_failed");
+      forbidden(res, undefined, req);
       return;
     }
 
@@ -86,8 +93,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     });
 
     const nowFresh = await hasFreshDeviceAttestation(session.userId, session.deviceId);
-    json(res, 200, { ok: nowFresh });
+    json(res, 200, { ok: nowFresh }, req);
   } catch {
-    serverError(res);
+    serverError(res, req);
   }
 }

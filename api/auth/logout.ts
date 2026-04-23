@@ -5,12 +5,12 @@ import { writeAuthAudit } from "../../lib/audit.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method === "OPTIONS") {
-    handleOptions(res);
+    handleOptions(res, req);
     return;
   }
 
   if (req.method !== "POST") {
-    methodNotAllowed(res, ["POST"]);
+    methodNotAllowed(res, ["POST"], req);
     return;
   }
 
@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const revoked = await revokeSession(session.sessionJti);
     if (!revoked) {
-      badRequest(res, "session_not_revoked");
+      badRequest(res, undefined, req);
       return;
     }
 
@@ -32,8 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       eventType: "logout_success"
     });
 
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true }, req);
   } catch {
-    serverError(res);
+    serverError(res, req);
   }
 }

@@ -1,14 +1,18 @@
-import type { VercelResponse } from "./vercel-types.js";
+import type { VercelRequest, VercelResponse } from "./vercel-types.js";
+import { addRestrictedCorsHeaders } from "./security.js";
 
-export function addCorsHeaders(res: VercelResponse): VercelResponse {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Max-Age", "86400");
+/**
+ * PRIVATE APP CORS
+ * Only allow requests from your startup agency's domains
+ * Configure allowed origins in lib/security.ts
+ */
+export function addCorsHeaders(res: VercelResponse, req?: VercelRequest): VercelResponse {
+  const origin = req?.headers["origin"] as string | undefined;
+  addRestrictedCorsHeaders(res, origin);
   return res;
 }
 
-export function handleCorsPreFlight(res: VercelResponse): void {
-  addCorsHeaders(res);
+export function handleCorsPreFlight(res: VercelResponse, req?: VercelRequest): void {
+  addCorsHeaders(res, req);
   res.status(200).send("");
 }

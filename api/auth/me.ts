@@ -4,12 +4,12 @@ import { json, methodNotAllowed, serverError, handleOptions } from "../../lib/ht
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method === "OPTIONS") {
-    handleOptions(res);
+    handleOptions(res, req);
     return;
   }
 
   if (req.method !== "GET") {
-    methodNotAllowed(res, ["GET"]);
+    methodNotAllowed(res, ["GET"], req);
     return;
   }
 
@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     ]);
 
     if (!sessionActive) {
-      json(res, 401, { error: "unauthorized" });
+      json(res, 401, { error: "unauthorized" }, req);
       return;
     }
 
@@ -34,8 +34,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       userId: session.userId,
       deviceId: session.deviceId,
       attestationFresh
-    });
+    }, req);
   } catch {
-    serverError(res);
+    serverError(res, req);
   }
 }

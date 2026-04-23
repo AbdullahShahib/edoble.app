@@ -12,34 +12,78 @@ import { verifyPlayIntegrityToken } from "../../lib/integrity.js";
 import { badRequest, forbidden, json, methodNotAllowed, serverError, unauthorized, handleOptions } from "../../lib/http.js";
 import { env } from "../../lib/env.js";
 import { writeAuthAudit } from "../../lib/audit.js";
+import {
+  checkRateLimit,
+  sanitizeEmail,
+  validateDeviceId,
+  validateNonce,
+  recordFailedLoginAttempt
+} from "../../lib/security.js";
 
 const schema = z.object({
   email: z.string().email().max(254),
-  password: z.string().min(8).max(128),
-  deviceId: z.string().min(8).max(128),
-  nonce: z.string().min(10).max(256),
+  password: z.string().min(12).max(128),
+  deviceId: z.string().min(32).max(128),
+  nonce: z.string().min(24).max(512),
   integrityToken: z.string().min(10)
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method === "OPTIONS") {
-    handleOptions(res);
+    handleOptions(res, req);
     return;
   }
 
   if (req.method !== "POST") {
-    methodNotAllowed(res, ["POST"]);
+    methodNotAllowed(res, ["POST"], req);
     return;
   }
 
   try {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      badRequest(res, "invalid_payload");
+      badRequest(res, undefined, req);
       return;
     }
 
-    const email = parsed.data.email.toLowerCase();
+    const email = sanitizeEmail(parsed.data.email);
+    if (!email) {
+      badRequest(res, undefined, req);
+      return;
+    }
+
+    // Validate device ID format (prevent spoofing)
+    if (!validateDeviceId(parsed.data.deviceId)) {
+      badRequest(res, undefined, req);
+      return;
+    }
+
+    // Validate nonce format
+    if (!validateNonce(parsed.data.nonce)) {
+      badRequest(res, undefined, req);
+      return;
+    }
+
+    // Rate limit: max 5 login attempts per 15 minutes per email
+    const rateLimit = await checkRateLimit(`login:${email}`, 5, 900);
+    if (!rateLimit.allowed) {
+      json(res, 429, {
+        error: "rate_limited",
+        retryAfterSeconds: rateLimit.resetSeconds
+      }, req);
+      return;
+    }
+
+    // Check account lockout (5+ failed attempts in last hour)
+    const lockout = await recordFailedLoginAttempt(email);
+    if (lockout.locked) {
+      json(res, 423, {
+        error: "account_locked",
+        message: "Too many failed attempts. Try again in 1 hour."
+      }, req);
+      return;
+    }
+
     const nonceOk = await consumeIntegrityNonce(email, parsed.data.nonce);
     if (!nonceOk) {
       await writeAuthAudit({
@@ -48,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         eventType: "login_failure",
         reason: "nonce_invalid_or_expired"
       });
-      unauthorized(res);
+      unauthorized(res, req);
       return;
     }
 
@@ -60,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         eventType: "integrity_failure",
         reason: "play_integrity_verdict_failed"
       });
-      forbidden(res, "device_integrity_failed");
+      forbidden(res, undefined, req);
       return;
     }
 
@@ -72,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         eventType: "login_failure",
         reason: "user_not_authorized"
       });
-      unauthorized(res);
+      unauthorized(res, req);
       return;
     }
 
@@ -84,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         eventType: "login_failure",
         reason: "invalid_password"
       });
-      unauthorized(res);
+      unauthorized(res, req);
       return;
     }
 
@@ -120,8 +164,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       accessToken: token,
       tokenType: "Bearer",
       expiresIn: env.JWT_EXPIRES_SECONDS
-    });
+    }, req);
   } catch {
-    serverError(res);
+    serverError(res, req);
   }
 }

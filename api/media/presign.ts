@@ -18,12 +18,12 @@ function isKeyAllowedForUser(objectKey: string, userId: number): boolean {
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method === "OPTIONS") {
-    handleOptions(res);
+    handleOptions(res, req);
     return;
   }
 
   if (req.method !== "POST") {
-    methodNotAllowed(res, ["POST"]);
+    methodNotAllowed(res, ["POST"], req);
     return;
   }
 
@@ -35,18 +35,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const hasAttestation = await hasFreshDeviceAttestation(session.userId, session.deviceId);
     if (!hasAttestation) {
-      forbidden(res, "stale_or_missing_attestation");
+      forbidden(res, undefined, req);
       return;
     }
 
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      badRequest(res, "invalid_payload");
+      badRequest(res, undefined, req);
       return;
     }
 
     if (!isKeyAllowedForUser(parsed.data.objectKey, session.userId)) {
-      forbidden(res, "invalid_object_scope");
+      forbidden(res, undefined, req);
       return;
     }
 
@@ -54,17 +54,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       const mimeType = parsed.data.mimeType;
       const sizeBytes = parsed.data.sizeBytes;
       if (!mimeType || !sizeBytes) {
-        badRequest(res, "mimeType_and_size_required");
+        badRequest(res, undefined, req);
         return;
       }
 
       if (!env.allowedMediaMime.has(mimeType)) {
-        forbidden(res, "unsupported_media_type");
+        forbidden(res, undefined, req);
         return;
       }
 
       if (sizeBytes > env.MAX_UPLOAD_BYTES) {
-        forbidden(res, "file_too_large");
+        forbidden(res, undefined, req);
         return;
       }
 
@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         method: "PUT",
         url: uploadUrl,
         expiresIn: env.R2_PRESIGN_TTL_SECONDS
-      });
+      }, req);
       return;
     }
 
@@ -87,8 +87,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       method: "GET",
       url: downloadUrl,
       expiresIn: env.R2_PRESIGN_TTL_SECONDS
-    });
+    }, req);
   } catch {
-    serverError(res);
+    serverError(res, req);
   }
 }
