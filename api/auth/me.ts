@@ -1,8 +1,13 @@
 import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { isSessionActive, resolveSessionFromBearer, hasFreshDeviceAttestation } from "../../lib/auth.js";
-import { json, methodNotAllowed, serverError } from "../../lib/http.js";
+import { json, methodNotAllowed, serverError, handleOptions } from "../../lib/http.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method === "OPTIONS") {
+    handleOptions(res);
+    return;
+  }
+
   if (req.method !== "GET") {
     methodNotAllowed(res, ["GET"]);
     return;

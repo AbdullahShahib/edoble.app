@@ -7,7 +7,7 @@ import {
   upsertDeviceAttestation
 } from "../../lib/auth.js";
 import { verifyPlayIntegrityToken } from "../../lib/integrity.js";
-import { badRequest, forbidden, json, methodNotAllowed, serverError } from "../../lib/http.js";
+import { badRequest, forbidden, json, methodNotAllowed, serverError, handleOptions } from "../../lib/http.js";
 import { createIntegrityNonce } from "../../lib/auth.js";
 import { writeAuthAudit } from "../../lib/audit.js";
 
@@ -17,6 +17,11 @@ const schema = z.object({
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method === "OPTIONS") {
+    handleOptions(res);
+    return;
+  }
+
   if (req.method === "GET") {
     const session = await resolveSessionFromBearer(req, res);
     if (!session) {

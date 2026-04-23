@@ -9,7 +9,7 @@ import {
 } from "../../lib/auth.js";
 import { signAccessToken } from "../../lib/jwt.js";
 import { verifyPlayIntegrityToken } from "../../lib/integrity.js";
-import { badRequest, forbidden, json, methodNotAllowed, serverError, unauthorized } from "../../lib/http.js";
+import { badRequest, forbidden, json, methodNotAllowed, serverError, unauthorized, handleOptions } from "../../lib/http.js";
 import { env } from "../../lib/env.js";
 import { writeAuthAudit } from "../../lib/audit.js";
 
@@ -22,6 +22,11 @@ const schema = z.object({
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method === "OPTIONS") {
+    handleOptions(res);
+    return;
+  }
+
   if (req.method !== "POST") {
     methodNotAllowed(res, ["POST"]);
     return;

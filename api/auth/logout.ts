@@ -1,9 +1,14 @@
 import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { resolveSessionFromBearer, revokeSession } from "../../lib/auth.js";
-import { badRequest, json, methodNotAllowed, serverError } from "../../lib/http.js";
+import { badRequest, json, methodNotAllowed, serverError, handleOptions } from "../../lib/http.js";
 import { writeAuthAudit } from "../../lib/audit.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method === "OPTIONS") {
+    handleOptions(res);
+    return;
+  }
+
   if (req.method !== "POST") {
     methodNotAllowed(res, ["POST"]);
     return;

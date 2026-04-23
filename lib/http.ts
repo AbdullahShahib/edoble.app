@@ -1,10 +1,17 @@
-import type { VercelResponse } from "./vercel-types.js";
+import type { VercelRequest, VercelResponse } from "./vercel-types.js";
+import { addCorsHeaders, handleCorsPreFlight } from "./cors.js";
 
 export function json(res: VercelResponse, status: number, payload: unknown): void {
+  addCorsHeaders(res);
   res.status(status).setHeader("Content-Type", "application/json").send(JSON.stringify(payload));
 }
 
+export function handleOptions(res: VercelResponse): void {
+  handleCorsPreFlight(res);
+}
+
 export function methodNotAllowed(res: VercelResponse, allowed: string[]): void {
+  addCorsHeaders(res);
   res.setHeader("Allow", allowed.join(", "));
   json(res, 405, { error: "method_not_allowed" });
 }

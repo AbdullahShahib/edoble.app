@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { z } from "zod";
 import { hasFreshDeviceAttestation, resolveSessionFromBearer } from "../../lib/auth.js";
 import { env } from "../../lib/env.js";
-import { badRequest, forbidden, json, methodNotAllowed, serverError } from "../../lib/http.js";
+import { badRequest, forbidden, json, methodNotAllowed, serverError, handleOptions } from "../../lib/http.js";
 import { createDownloadUrl, createUploadUrl } from "../../lib/r2.js";
 
 const schema = z.object({
@@ -17,6 +17,11 @@ function isKeyAllowedForUser(objectKey: string, userId: number): boolean {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method === "OPTIONS") {
+    handleOptions(res);
+    return;
+  }
+
   if (req.method !== "POST") {
     methodNotAllowed(res, ["POST"]);
     return;
