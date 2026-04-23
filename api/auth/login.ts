@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { z } from "zod";
 import {
   consumeIntegrityNonce,
@@ -87,7 +87,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       userId: user.id,
       deviceId: parsed.data.deviceId,
       ipAddress: req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ?? null,
-      userAgent: req.headers["user-agent"] ?? null
+      userAgent: Array.isArray(req.headers["user-agent"])
+        ? req.headers["user-agent"][0] ?? null
+        : req.headers["user-agent"] ?? null
     });
 
     await upsertDeviceAttestation({

@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { resolveSessionFromBearer, revokeSession } from "../../lib/auth.js";
 import { badRequest, json, methodNotAllowed, serverError } from "../../lib/http.js";
 import { writeAuthAudit } from "../../lib/audit.js";

@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { z } from "zod";
 import { hasFreshDeviceAttestation, resolveSessionFromBearer } from "../../lib/auth.js";
 import { env } from "../../lib/env.js";

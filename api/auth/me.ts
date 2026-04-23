@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../../lib/vercel-types.js";
 import { isSessionActive, resolveSessionFromBearer, hasFreshDeviceAttestation } from "../../lib/auth.js";
 import { json, methodNotAllowed, serverError } from "../../lib/http.js";
 

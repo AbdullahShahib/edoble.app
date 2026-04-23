@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./vercel-types.js";
 import bcrypt from "bcryptjs";
 import { pool, queryOne } from "./db.js";
 import { env } from "./env.js";
@@ -147,7 +147,8 @@ export async function resolveSessionFromBearer(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<{ userId: number; sessionJti: string; deviceId: string; email: string } | null> {
-  const authHeader = req.headers.authorization;
+  const authHeaderRaw = req.headers.authorization;
+  const authHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     unauthorized(res);
     return null;

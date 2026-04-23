@@ -1,4 +1,4 @@
-import type { VercelResponse } from "@vercel/node";
+import type { VercelResponse } from "./vercel-types.js";
 
 export function json(res: VercelResponse, status: number, payload: unknown): void {
   res.status(status).setHeader("Content-Type", "application/json").send(JSON.stringify(payload));
