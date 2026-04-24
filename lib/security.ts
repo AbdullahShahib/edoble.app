@@ -1,5 +1,4 @@
 import type { VercelResponse } from "./vercel-types.js";
-import { pool } from "./db.js";
 
 /**
  * SECURITY HEADERS
@@ -47,9 +46,7 @@ export function addRestrictedCorsHeaders(res: VercelResponse, origin?: string): 
   // For private app: hardcode allowed origins
   // Replace with your actual domains
   const allowedOrigins = [
-    "http://localhost:3000", // Local development
-    "http://localhost:5173", // Vite dev
-    "http://localhost:8081" // Mobile preview
+    "https://edoble-app.vercel.app"
   ];
 
   if (origin && allowedOrigins.includes(origin)) {
@@ -102,6 +99,7 @@ export async function checkRateLimit(
   maxAttempts: number = 5,
   windowSeconds: number = 300 // 5 minute window
 ): Promise<{ allowed: boolean; remainingAttempts: number; resetSeconds: number }> {
+  const { pool } = await import("./db.js");
   const now = new Date();
   const windowStart = new Date(now.getTime() - windowSeconds * 1000);
 
@@ -163,6 +161,7 @@ export async function checkRateLimit(
  * Disable accounts after repeated failed login attempts
  */
 export async function recordFailedLoginAttempt(email: string): Promise<{ locked: boolean; attemptsRemaining: number }> {
+  const { pool } = await import("./db.js");
   const email_hash = Buffer.from(email.toLowerCase()).toString("hex");
 
   // Get current failed attempts (within last hour)
