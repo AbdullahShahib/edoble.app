@@ -336,6 +336,8 @@ export function EdobleLanding() {
   const heroVisualRef = useRef<any>(null);
   const servicesHeadingRef = useRef<any>(null);
   const workHeadingRef = useRef<any>(null);
+  const workTitlesRef = useRef<any>(null);
+  const workImagesRef = useRef<any>(null);
   const whyHeadingRef = useRef<any>(null);
   const aboutHeadingRef = useRef<any>(null);
   const contactHeadingRef = useRef<any>(null);
@@ -345,6 +347,7 @@ export function EdobleLanding() {
   const aboutSectionRef = useRef<any>(null);
   const contactSectionRef = useRef<any>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [stats, setStats] = useState({ projects: '0+', services: '0', retention: '0%' });
   const [statsAnimated, setStatsAnimated] = useState(false);
@@ -441,6 +444,7 @@ export function EdobleLanding() {
 
       revealSection(servicesSectionRef.current, [servicesHeadingRef.current, ...serviceCardRefs.current]);
       revealSection(workSectionRef.current, [workHeadingRef.current, ...projectCardRefs.current]);
+
       revealSection(whySectionRef.current, [whyHeadingRef.current]);
       revealSection(aboutSectionRef.current, [aboutHeadingRef.current]);
       revealSection(contactSectionRef.current, [contactHeadingRef.current]);
@@ -501,6 +505,21 @@ export function EdobleLanding() {
     await Linking.openURL(`mailto:hello@edoble.com?subject=${subject}&body=${body}`);
   };
 
+  const workSectionStart = sectionOffsets.current.work;
+  const workAnimationProgress = Math.max(
+    0,
+    Math.min(1, (scrollY - (workSectionStart - height * 0.2)) / Math.max(height * 0.8, 1))
+  );
+  const servicesSectionStart = sectionOffsets.current.services;
+  const servicesAnimationProgress = Math.max(
+    0,
+    Math.min(1, (scrollY - (servicesSectionStart - height * 0.1)) / Math.max(height * 1.2, 1))
+  );
+  const servicesShiftProgress = Math.min(1, servicesAnimationProgress / 0.5);
+  const servicesScaleProgress = Math.max(0, (servicesAnimationProgress - 0.5) / 0.5);
+  const servicesMinScale = width <= 960 ? 0.3 : 0.1;
+  const servicesScale = 1 - servicesScaleProgress * (1 - servicesMinScale);
+
   return (
     <View style={styles.page}>
       <StatusBar style="dark" />
@@ -543,7 +562,11 @@ export function EdobleLanding() {
 
       <ScrollView
         ref={scrollRef}
-        onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 60)}
+        onScroll={(event) => {
+          const nextScrollY = event.nativeEvent.contentOffset.y;
+          setScrolled(nextScrollY > 60);
+          setScrollY(nextScrollY);
+        }}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -613,19 +636,48 @@ export function EdobleLanding() {
 
         <View ref={servicesSectionRef} onLayout={handleSectionLayout('services')} style={[styles.section, styles.sectionSoft]}>
           <View style={styles.container}>
-            <SectionHeading
-              eyebrow="What We Do"
-              title="Every Service You Need. One Team."
-              body="From the first wireframe to the final deployment - we handle it all."
-              titleRef={(node) => {
-                servicesHeadingRef.current = node;
-              }}
-            />
+            <View style={styles.servicesStage}>
+              <View
+                style={[
+                  styles.servicesHeaderRow,
+                  styles.servicesHeaderLeft,
+                  { transform: [{ translateX: width * (1 - servicesShiftProgress) }, { scale: servicesScale }] },
+                ]}>
+                <Text style={styles.servicesHeaderText}>Website Development</Text>
+              </View>
+              <View
+                style={[
+                  styles.servicesHeaderRow,
+                  styles.servicesHeaderCenter,
+                  { transform: [{ translateX: -width * (1 - servicesShiftProgress) }, { scale: servicesScale }] },
+                ]}>
+                <Text style={styles.servicesHeaderText}>App Development</Text>
+              </View>
+              <View
+                style={[
+                  styles.servicesHeaderRow,
+                  styles.servicesHeaderRight,
+                  { transform: [{ translateX: width * (1 - servicesShiftProgress) }, { scale: servicesScale }] },
+                ]}>
+                <Text style={styles.servicesHeaderText}>UI/UX Design</Text>
+              </View>
 
-            <View style={styles.servicesGrid}>
-              {serviceCards.map((item, index) => (
-                <ServiceCard key={item.title} item={item} index={index} register={registerServiceCard} />
-              ))}
+              <View style={styles.servicesCopyWrap}>
+                <SectionHeading
+                  eyebrow="What We Do"
+                  title="Every Service You Need. One Team."
+                  body="From the first wireframe to the final deployment - we handle it all."
+                  titleRef={(node) => {
+                    servicesHeadingRef.current = node;
+                  }}
+                />
+              </View>
+
+              <View style={styles.servicesGrid}>
+                {serviceCards.map((item, index) => (
+                  <ServiceCard key={item.title} item={item} index={index} register={registerServiceCard} />
+                ))}
+              </View>
             </View>
           </View>
         </View>
@@ -642,13 +694,40 @@ export function EdobleLanding() {
 
             {isDesktop ? (
               <View style={styles.projectsGrid}>
-                <View style={styles.projectsRow}>
-                  <ProjectCard item={projectCards[0]} index={0} register={registerProjectCard} />
-                  <ProjectCard item={projectCards[1]} index={1} register={registerProjectCard} />
-                </View>
-                <View style={styles.projectsRow}>
-                  <ProjectCard item={projectCards[2]} index={2} register={registerProjectCard} />
-                  <ProjectCard item={projectCards[3]} index={3} register={registerProjectCard} />
+                <View style={styles.workScene}>
+                  {/* Titles horizontal strip (wide) */}
+                  <View
+                    ref={workTitlesRef}
+                    style={[
+                      styles.titlesStrip,
+                      {
+                        width: width * projectCards.length,
+                        transform: [{ translateX: -(workAnimationProgress * width * (projectCards.length - 1)) }],
+                      },
+                    ]}>
+                    {projectCards.map((item, i) => (
+                      <View key={`title-${i}`} style={[styles.titlePanel, { width }]}>
+                        <Text style={styles.titleStripText}>{item.title}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Images horizontal strip (wide) */}
+                  <View
+                    ref={workImagesRef}
+                    style={[
+                      styles.imagesStrip,
+                      {
+                        width: width * projectCards.length,
+                        transform: [{ translateX: workAnimationProgress * width }],
+                      },
+                    ]}>
+                    {projectCards.map((item, index) => (
+                      <View key={`img-${index}`} style={[styles.imagePanel, { width }]}>
+                        <ProjectCard item={item} index={index} register={registerProjectCard} />
+                      </View>
+                    ))}
+                  </View>
                 </View>
               </View>
             ) : (
@@ -1097,10 +1176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.34)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
+    boxShadow: '0px 12px 24px rgba(0,0,0,0.08)',
   },
   visualCircleInner: {
     alignItems: 'center',
@@ -1224,6 +1300,44 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 24,
   },
+  servicesStage: {
+    position: 'relative',
+    overflow: 'hidden',
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  servicesCopyWrap: {
+    paddingTop: 136,
+    paddingBottom: 36,
+  },
+  servicesHeaderRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    minHeight: 128,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: brand.background,
+  },
+  servicesHeaderLeft: {
+    top: 0,
+  },
+  servicesHeaderCenter: {
+    top: 112,
+    zIndex: 2,
+  },
+  servicesHeaderRight: {
+    top: 224,
+  },
+  servicesHeaderText: {
+    color: brand.text,
+    fontFamily: 'DMSerifDisplay_400Regular',
+    fontSize: 72,
+    lineHeight: 76,
+    letterSpacing: -1.6,
+    textAlign: 'center',
+  },
   serviceCard: {
     flexGrow: 1,
     flexBasis: 0,
@@ -1238,10 +1352,7 @@ const styles = StyleSheet.create({
   },
   serviceCardHover: {
     borderColor: brand.accent,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 40,
-    shadowOffset: { width: 0, height: 8 },
+    boxShadow: '0px 8px 40px rgba(0,0,0,0.06)',
   },
   serviceNumber: {
     position: 'absolute',
@@ -1288,11 +1399,20 @@ const styles = StyleSheet.create({
     transform: [{ translateY: 0 }],
   },
   projectsGrid: {
-    gap: 24,
+    position: 'relative',
+    minHeight: 760,
+    overflow: 'hidden',
+    backgroundColor: '#FFFDF7',
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: brand.border,
   },
-  projectsRow: {
-    flexDirection: 'row',
-    gap: 24,
+  workScene: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   projectsStack: {
     gap: 24,
@@ -1417,6 +1537,40 @@ const styles = StyleSheet.create({
     color: brand.accent,
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
+  },
+  titlesStrip: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: 28,
+    left: 0,
+    height: 180,
+    alignItems: 'center',
+  },
+  titlePanel: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleStripText: {
+    fontFamily: 'DMSerifDisplay_400Regular',
+    fontSize: 72,
+    fontStyle: 'italic',
+    letterSpacing: -1.2,
+    color: brand.text,
+  },
+  imagesStrip: {
+    flexDirection: 'row',
+    position: 'absolute',
+    left: 0,
+    top: '50%',
+    height: 460,
+    alignItems: 'center',
+    transform: [{ translateY: -60 }],
+  },
+  imagePanel: {
+    width: '100%',
+    paddingHorizontal: 40,
+    justifyContent: 'center',
   },
   advantageGrid: {
     flexDirection: 'row',
@@ -1760,4 +1914,4 @@ const styles = StyleSheet.create({
     fontSize: 44,
     lineHeight: 52,
   },
-});
+}) as unknown as { [key: string]: any };

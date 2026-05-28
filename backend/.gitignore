@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dev.db
+/.env
+npm-debug.log
+coverage/
+/.idea/
+*.log

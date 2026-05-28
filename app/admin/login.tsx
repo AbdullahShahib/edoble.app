@@ -50,6 +50,9 @@ export default function AdminLoginScreen() {
 
     clearFailedAttempts('admin');
     setError('');
+    try {
+      if (typeof window !== 'undefined') window.localStorage.setItem('edoble.pending.username', email);
+    } catch {}
     signInAdmin();
     router.replace('/admin/dashboard');
   };

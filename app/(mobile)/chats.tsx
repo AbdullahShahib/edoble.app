@@ -36,7 +36,7 @@ const items = [
     name: 'Archived Logs',
     time: 'Oct 12',
     preview: 'Data retention cycle completed.',
-    icon: 'folder_managed',
+    icon: 'archive',
   },
 ];
 

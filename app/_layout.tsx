@@ -1,31 +1,30 @@
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { DMSerifDisplay_400Regular } from '@expo-google-fonts/dm-serif-display';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Inter_400Regular, Inter_500Medium, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { SessionProvider } from '@/components/session';
 
 SplashScreen.preventAutoHideAsync();
 
-const edobleTheme = {
-  ...DefaultTheme,
+const secureTheme = {
+  ...DarkTheme,
   colors: {
-    ...DefaultTheme.colors,
-    background: '#F7F6F2',
-    card: '#FFFFFF',
-    text: '#141414',
-    border: '#E8E6E0',
-    primary: '#C9A96E',
+    ...DarkTheme.colors,
+    background: '#09090B',
+    card: '#0F172A',
+    text: '#F8FAFC',
+    border: '#1E293B',
+    primary: '#0284C7',
   },
 };
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    DMSerifDisplay_400Regular,
     Inter_400Regular,
     Inter_500Medium,
     Inter_700Bold,
@@ -48,11 +47,12 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
-      <ThemeProvider value={edobleTheme}>
+      <ThemeProvider value={secureTheme}>
+        <StatusBar style="light" />
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: '#F7F6F2' },
+            contentStyle: { backgroundColor: '#09090B' },
           }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="login" />

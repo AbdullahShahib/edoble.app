@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ develop, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: |
+          if [ -f backend/package.json ]; then
+            (cd backend && npm ci && npm run prisma:generate) || true
+          fi
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Run tests
+        run: npm test --if-present
+
+      - name: Build web bundle
+        run: |
+          # Ensure you have a build script that emits production web artifacts.
+          # Update this step to match your repo scripts (expo export:web or similar).
+          npm run build:web --if-present || npm run web:build --if-present || echo "No web build script configured"
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web-build || .

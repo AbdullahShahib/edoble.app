@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type SessionRole = 'employee' | 'admin';
 export type Permission =
@@ -212,29 +212,61 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     async function hydrate() {
       try {
-        const [rawSession, rawSecurity] = await Promise.all([
-          getStorageItem(SESSION_KEY),
-          getStorageItem(SECURITY_KEY),
-        ]);
+        // Try server-side refresh using HttpOnly cookie
+        try {
+          const resp = await fetch('/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: null }),
+          });
 
-        if (cancelled) {
-          return;
+          if (resp.ok) {
+            const data = await resp.json();
+            const token = data.accessToken as string | undefined;
+            const expiresIn = data.expiresIn as number | undefined;
+            if (token && expiresIn) {
+              const payload = decodeJwt(token);
+              const perms = (payload?.permissions as Permission[]) || [];
+              const role: SessionRole = perms.includes('admin:access') ? 'admin' : 'employee';
+              const now = Date.now();
+              const s: SessionData = {
+                role,
+                permissions: perms as Permission[],
+                issuedAt: now,
+                expiresAt: now + (expiresIn || 300) * 1000,
+                maxExpiresAt: now + ABSOLUTE_TTL_MS,
+                mfaVerified: true,
+              };
+              if (!cancelled) setSession(s);
+            }
+          }
+        } catch (e) {
+          // ignore network errors and fall back to local storage
         }
 
-        const restoredSession = parseSession(rawSession);
-        const restoredSecurity = parseSecurityState(rawSecurity);
+        if (!session) {
+          // fallback: hydrate from storage
+          const [rawSession, rawSecurity] = await Promise.all([
+            getStorageItem(SESSION_KEY),
+            getStorageItem(SECURITY_KEY),
+          ]);
 
-        if (isSessionValid(restoredSession)) {
-          setSession(restoredSession);
-        } else {
-          setSession(null);
+          if (cancelled) return;
+
+          const restoredSession = parseSession(rawSession);
+          const restoredSecurity = parseSecurityState(rawSecurity);
+
+          if (isSessionValid(restoredSession)) {
+            setSession(restoredSession);
+          } else {
+            setSession(null);
+          }
+
+          setSecurityState(restoredSecurity);
         }
-
-        setSecurityState(restoredSecurity);
       } finally {
-        if (!cancelled) {
-          setIsSessionReady(true);
-        }
+        if (!cancelled) setIsSessionReady(true);
       }
     }
 
@@ -274,15 +306,179 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
-  const value = useMemo<SessionContextValue>(() => {
-    const authenticated = isSessionValid(session);
-
-    const getRemainingLockoutMs = (scope: AuthScope) => {
+  const getRemainingLockoutMs = useCallback(
+    (scope: AuthScope) => {
       const remaining = securityState[scope].lockoutUntil - Date.now();
       return remaining > 0 ? remaining : 0;
-    };
+    },
+    [securityState],
+  );
 
-    const canAttempt = (scope: AuthScope) => getRemainingLockoutMs(scope) === 0;
+  const canAttempt = useCallback((scope: AuthScope) => getRemainingLockoutMs(scope) === 0, [getRemainingLockoutMs]);
+
+  const registerFailedAttempt = useCallback((scope: AuthScope) => {
+    setSecurityState((current) => {
+      const now = Date.now();
+      const currentEntry = current[scope];
+
+      if (now < currentEntry.lockoutUntil) {
+        return current;
+      }
+
+      const inWindow = now - currentEntry.firstAttemptAt <= ATTEMPT_WINDOW_MS;
+      const nextCount = inWindow ? currentEntry.count + 1 : 1;
+      const nextEntry: AttemptEntry = {
+        count: nextCount,
+        firstAttemptAt: inWindow ? currentEntry.firstAttemptAt : now,
+        lockoutUntil: nextCount >= MAX_ATTEMPTS ? now + LOCKOUT_MS : 0,
+      };
+
+      return { ...current, [scope]: nextEntry };
+    });
+  }, []);
+
+  const clearFailedAttempts = useCallback((scope: AuthScope) => {
+    setSecurityState((current) => ({
+      ...current,
+      [scope]: initialAttemptEntry(),
+    }));
+  }, []);
+
+  const signInEmployee = useCallback(() => {
+    (async () => {
+      // attempt backend login using pending username stored during login flow
+      try {
+        let pending = null;
+        try {
+          pending = isWebRuntime ? window.localStorage.getItem('edoble.pending.username') : await getStorageItem('edoble.pending.username');
+        } catch {}
+
+        const username = pending || 'employee';
+        const resp = await fetch('/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+
+        if (!resp.ok) {
+          setSession(null);
+          return;
+        }
+
+        const data = await resp.json();
+        const token = data.accessToken as string | undefined;
+        const expiresIn = data.expiresIn as number | undefined;
+        if (token && expiresIn) {
+          const payload = decodeJwt(token);
+          const perms = (payload?.permissions as Permission[]) || [];
+          const role: SessionRole = perms.includes('admin:access') ? 'admin' : 'employee';
+          const now = Date.now();
+          const s: SessionData = {
+            role,
+            permissions: perms as Permission[],
+            issuedAt: now,
+            expiresAt: now + (expiresIn || 300) * 1000,
+            maxExpiresAt: now + ABSOLUTE_TTL_MS,
+            mfaVerified: true,
+          };
+          setSession(s);
+        }
+      } catch {
+        setSession(null);
+      } finally {
+        try {
+          if (isWebRuntime) window.localStorage.removeItem('edoble.pending.username');
+          else await deleteStorageItem('edoble.pending.username');
+        } catch {}
+      }
+    })();
+  }, []);
+
+  const signInAdmin = useCallback(() => {
+    (async () => {
+      try {
+        let pending = null;
+        try {
+          pending = isWebRuntime ? window.localStorage.getItem('edoble.pending.username') : await getStorageItem('edoble.pending.username');
+        } catch {}
+        const username = pending || 'admin';
+        const resp = await fetch('/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        });
+        if (!resp.ok) {
+          setSession(null);
+          return;
+        }
+        const data = await resp.json();
+        const token = data.accessToken as string | undefined;
+        const expiresIn = data.expiresIn as number | undefined;
+        if (token && expiresIn) {
+          const payload = decodeJwt(token);
+          const perms = (payload?.permissions as Permission[]) || [];
+          const role: SessionRole = perms.includes('admin:access') ? 'admin' : 'employee';
+          const now = Date.now();
+          const s: SessionData = {
+            role,
+            permissions: perms as Permission[],
+            issuedAt: now,
+            expiresAt: now + (expiresIn || 300) * 1000,
+            maxExpiresAt: now + ABSOLUTE_TTL_MS,
+            mfaVerified: true,
+          };
+          setSession(s);
+        }
+      } catch {
+        setSession(null);
+      } finally {
+        try {
+          if (isWebRuntime) window.localStorage.removeItem('edoble.pending.username');
+          else await deleteStorageItem('edoble.pending.username');
+        } catch {}
+      }
+    })();
+  }, []);
+
+  const touchSession = useCallback(() => {
+    setSession((current) => {
+      if (!current || !isSessionValid(current)) {
+        return null;
+      }
+
+      const now = Date.now();
+      const nextExpiry = Math.min(now + IDLE_TTL_MS, current.maxExpiresAt);
+
+      return nextExpiry === current.expiresAt ? current : { ...current, expiresAt: nextExpiry };
+    });
+  }, []);
+
+  const signOut = useCallback(() => {
+    (async () => {
+      try {
+        await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+      } catch {}
+      setSession(null);
+    })();
+  }, []);
+
+  function decodeJwt(token: string | null | undefined): any | null {
+    if (!token) return null;
+    try {
+      const parts = token.split('.');
+      if (parts.length < 2) return null;
+      const payload = parts[1];
+      const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+      return JSON.parse(decodeURIComponent(escape(json)));
+    } catch {
+      return null;
+    }
+  }
+
+  const value = useMemo<SessionContextValue>(() => {
+    const authenticated = isSessionValid(session);
 
     return {
       role: authenticated ? session?.role ?? null : null,
@@ -294,55 +490,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       hasPermission: (permission: Permission) => authenticated && Boolean(session?.permissions.includes(permission)),
       canAttempt,
       getRemainingLockoutMs,
-      registerFailedAttempt: (scope: AuthScope) => {
-        setSecurityState((current) => {
-          const now = Date.now();
-          const currentEntry = current[scope];
-
-          if (now < currentEntry.lockoutUntil) {
-            return current;
-          }
-
-          const inWindow = now - currentEntry.firstAttemptAt <= ATTEMPT_WINDOW_MS;
-          const nextCount = inWindow ? currentEntry.count + 1 : 1;
-          const nextEntry: AttemptEntry = {
-            count: nextCount,
-            firstAttemptAt: inWindow ? currentEntry.firstAttemptAt : now,
-            lockoutUntil: nextCount >= MAX_ATTEMPTS ? now + LOCKOUT_MS : 0,
-          };
-
-          return { ...current, [scope]: nextEntry };
-        });
-      },
-      clearFailedAttempts: (scope: AuthScope) => {
-        setSecurityState((current) => ({
-          ...current,
-          [scope]: initialAttemptEntry(),
-        }));
-      },
-      signInEmployee: () => {
-        setSession(buildSession('employee'));
-      },
-      signInAdmin: () => {
-        setSession(buildSession('admin'));
-      },
-      touchSession: () => {
-        setSession((current) => {
-          if (!current || !isSessionValid(current)) {
-            return null;
-          }
-
-          const now = Date.now();
-          const nextExpiry = Math.min(now + IDLE_TTL_MS, current.maxExpiresAt);
-
-          return { ...current, expiresAt: nextExpiry };
-        });
-      },
-      signOut: () => {
-        setSession(null);
-      },
+      registerFailedAttempt,
+      clearFailedAttempts,
+      signInEmployee,
+      signInAdmin,
+      touchSession,
+      signOut,
     };
-  }, [session, securityState, isSessionReady]);
+  }, [session, isSessionReady, canAttempt, getRemainingLockoutMs, registerFailedAttempt, clearFailedAttempts, signInEmployee, signInAdmin, touchSession, signOut]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

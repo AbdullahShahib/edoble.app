@@ -50,6 +50,9 @@ export default function LoginScreen() {
 
     clearFailedAttempts('employee');
     setError('');
+    try {
+      if (typeof window !== 'undefined') window.localStorage.setItem('edoble.pending.username', email);
+    } catch {}
     router.push('/mfa-challenge');
   };
 
